@@ -1515,7 +1515,7 @@ var PCTR=null;function pctRe(){if(PCTR)return PCTR;var v={};DATA.riders.forEach(
 function ocrMark(l){return l.replace(/^\s*(?:[+＋十⊕⊞@©®{}·ㆍ•]+|[(\[]\s*[+＋]\s*[)\]])\s*/,'').replace(/^\s*[()\[\]]\s+(?=[가-힣])/,'').replace(/\s[+＋⊕@{}]+(?=\s|$)/g,' ').replace(/\{/g,'(').replace(/\}/g,')').replace(pctRe(),'$1$2%')}
 function ocrClean(t){var unit=/단위\s*[:：;]?\s*만\s*원/.test(t);return String(t).split(/\n/).map(function(l){
     l=ocrMark(l);
-    l=l.replace(/[|｜]/g,' ').replace(/(\d)[.](\d{3})(?!\d)/g,'$1,$2').replace(/\((II|Il|lI|ll)\)/g,'(Ⅱ)').replace(/\((III|Ill|lll)\)/g,'(Ⅲ)').replace(/([가-힣)\]])(III|Ill|lll)(?=[\s(\[]|$)/g,'$1Ⅲ').replace(/([가-힣)\]])(II|Il|lI|ll)(?=[\s(\[]|$)/g,'$1Ⅱ').replace(/(\d)\s*만\s*[원워윈웜]/g,'$1만원').replace(/(일당|수술비)\s*\(\s*[0-9a-zA-Z|]{3,5}\s*\)/g,'$1(plus)');
+    l=l.replace(/[|｜]/g,' ').replace(/(\d)[.](\d{3})(?!\d)/g,'$1,$2').replace(/\((II|Il|lI|ll)\)/g,'(Ⅱ)').replace(/\((III|Ill|lll)\)/g,'(Ⅲ)').replace(/([가-힣)\]])(III|Ill|lll)(?=[\s(\[]|$)/g,'$1Ⅲ').replace(/([가-힣)\]])(II|Il|lI|ll)(?=[\s(\[]|$)/g,'$1Ⅱ').replace(/(\d)\s*만\s*[원워윈웜]/g,'$1만원').replace(/(일당|수술비)\s*\([^()가-힣]{3,7}[)\]]/g,'$1(plus)');
     if(unit)l=l.replace(/([가-힣)\]]\s+)(\d{1,3}(?:,\d{3})+|\d{1,5})(?=\s|$|[。.,、])/g,function(m,a,b,off){return inPar(l,off)?m:a+b+'만원'});
     return l.replace(/(\d[\d,]*\s*(?:만원|억원|억))\s+(?=[\[(]?[가-힣])/g,function(m,a,off){return inPar(l,off)?m:a+'\n'})}).join('\n')}
 function readImages(fs){var n=fs.length,out=[],say=function(t){$('#pmsg').textContent=t};say('글자 읽는 도구를 불러오는 중이에요... 처음 한 번은 10~20초 걸려요.');
