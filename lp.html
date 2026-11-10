@@ -1046,6 +1046,10 @@ function fm(n){n=Math.round(n*10)/10;if(n<10000)return f(n)+'만원';var e=Math.
 function kor(n){n=Math.round(n);if(n<1000)return '약 '+n+'만원';var r=Math.round(n/100)*100,e=Math.floor(r/10000),rest=r%10000,ch=Math.floor(rest/1000),bk=Math.round((rest%1000)/100),s='약 ';if(e)s+=e+'억 ';if(ch)s+=ch+'천';if(bk)s+=bk+'백';if(ch||bk)s+='만원';else s=s.trim()+'원';return s}
 var FIX={'뇌졸증':'뇌졸중','뇌졸쭝':'뇌졸중','뇌줄중':'뇌졸중','뇌출열':'뇌출혈','뇌경쇄':'뇌경색','심근경새':'심근경색','심근경쇄':'심근경색','갑상샘':'갑상선','백네장':'백내장','녹네장':'녹내장','체장암':'췌장암','담석쯩':'담석증','맹장염':'맹장'};
 var POP_F=['입원·간병','사망·후유장해','유방암','갑상선암','위암','뇌경색','심근경색','치매','디스크 수술','백내장 수술','골절 수술'],POP_M=['입원·간병','사망·후유장해','위암','폐암','전립선암','뇌경색','심근경색','치매','디스크 수술','백내장 수술','골절 수술'];
+var CA_F=['위암','대장암','폐암','유방암','갑상선암','간암','췌장암','자궁경부암','난소암','혈액암','담낭암','신장암','방광암','제자리암'],CA_M=['위암','대장암','폐암','전립선암','간암','췌장암','갑상선암','식도암','혈액암','담낭암','신장암','방광암','제자리암'];
+var TXW=[[/양성자/,'양성자방사선',['proton']],[/중입자/,'중입자방사선',['carbon']],[/세기조절/,'세기조절방사선',['imrt']],[/면역항암|면역치료/,'면역항암',['immune']],[/표적/,'표적항암',['target','target2','target3']],[/방사선/,'방사선치료',['rad','imrt','proton','carbon']],[/항암|화학요법/,'항암치료',['chemo','target','immune']]],TXK=null,TXL='';
+var TXS={chemo:'항암약물',target:'표적항암',target2:'표적항암',target3:'표적항암',immune:'면역항암',rad:'방사선',imrt:'세기조절',proton:'양성자',carbon:'중입자'};
+function txMode(q){for(var i=0;i<TXW.length;i++)if(TXW[i][0].test(q))return TXW[i];return null}
 /* ── 담보 → 엔진 입력 ── */
 function lastBr(s){var m=/\[([^\[\]]+)\]$/.exec(String(s||'').replace(/\s+$/,''));return m?m[1]:null}
 function isSup(nm){var k=ENG.classify(nm);return !!(k&&k.id==='care_support')}
@@ -1085,11 +1089,13 @@ function gradeOf(su){var g=ENG.surg5_grade(su[1],su[5]||null);return g}
 function lineRows(L){return L.map(function(x){return '<tr><td><b>'+esc(dispName(x.name))+'</b><span class="why">'+esc(x.why||'')+'</span></td>'+(x.svc&&!(x.amt>0)?'<td class="n svc">'+esc(x.svc)+'</td>':'<td class="n">'+f(x.amt)+'</td>')+'</tr>'}).join('')}
 function cardBody(x,res){if(x.t==='hp')return hpBlock(x);if(x.t==='lf')return lfBlock(x);if(PANELS[x.t]&&PANELS[x.t].blk)return PANELS[x.t].blk(x);if(x.t==='no')return '<p class="one" style="margin-top:0">'+esc(x.note)+'</p><p class="note">실손은 약관 기준으로 따로 봐요.</p>';
   if(x.c&&SCEN.isDem(x.c))return demBody(x,res);
-  var main=res.filter(function(s){return s.main}),opt=res.filter(function(s){return !s.main&&s.sum>0}),h=SCEN.headline(res),html='';
+  var txon=function(s){return !!(TXK&&TXK.indexOf(s.k)>-1)},txs=res.filter(txon);
+  var main=res.filter(function(s){return s.main&&!txon(s)}),opt=res.filter(function(s){return !s.main&&s.sum>0&&!txon(s)}),h=SCEN.headline(res),html='';
+  if(txs.length){html+='<div class="optw" style="margin-top:0"><p class="grpl">'+esc(TXL)+'</p>'+txs.map(function(s){return s.sum>0?'<details class="stg2" open><summary><span>'+esc(s.l)+'</span><b>+'+f(s.sum)+'만원</b></summary><table class="cxt">'+lineRows(s.lines)+'</table></details>':'<p class="note">'+esc(s.l)+': 가입하신 담보 중 나오는 게 없어요.</p>'}).join('')+'<p class="note" style="margin:6px 0 0">치료마다 따로 계산한 금액이에요. 같은 해에 여러 치료를 받으면 연 1회 항목과 연간 한도 때문에 다 더한 것보다 적을 수 있어요.</p></div><p class="grpl" style="margin-top:22px">진단·수술까지 보면</p>'}
   html+=h>0?'<div class="tt">'+f(h)+'만원</div><div class="kk">'+kor(h)+', '+(x.t==='su'?(x.su[1]==null?'이 시술·검사로 받는 보험금 합계예요':'이 수술로 받는 건강보험 보험금 합계예요'):(SCEN.isBlood(x.c)?'진단받고 항암치료까지 받을 때 건강보험 보험금 합계예요':'진단받고 수술까지 받을 때 건강보험 보험금 합계예요'))+'</div>':'<p class="none">'+(x.t==='su'&&x.su[1]==null?'가입하신 담보 중 이 시술·검사로 나오는 보장은 없어요.':'진단·수술로 바로 나오는 보장은 없어요.')+'</p>';
   main.forEach(function(s){if(!s.lines.length&&!(s.generic&&s.k==='surg'))return;html+='<div class="stg"><div class="sh"><span>'+esc(s.l)+'</span><b>'+(s.sum>0?fm(s.sum):'—')+'</b></div>'+(s.lines.length?'<table class="cxt">'+lineRows(s.lines)+'</table>':'')+
     (s.generic&&s.k==='surg'&&RID.some(function(r){var k=ENG.classify(r.name);return k&&k.kind==='surg'&&(k.opt||{}).grade})?'<p class="note">1-5종·1-7종 수술비는 수술마다 종이 달라요. 수술명으로 검색하면 나와요.</p>':'')+'</div>'});
-  if(opt.length)html+='<div class="optw"><p class="grpl">이럴 때 더 나와요</p>'+'<p class="note" style="margin:0 0 6px">치료마다 따로 계산한 금액이에요. 같은 해에 여러 치료를 받으면 연 1회 항목과 연간 한도 때문에 다 더한 것보다 적을 수 있어요.</p>'+opt.map(function(s){return '<details class="stg2"><summary><span>'+esc(s.l)+'</span><b>+'+f(s.sum)+'만원</b></summary><table class="cxt">'+lineRows(s.lines)+'</table></details>'}).join('')+'</div>';
+  if(opt.length)html+='<div class="optw"><p class="grpl">이럴 때 더 나와요</p>'+(txs.length?'':'<p class="note" style="margin:0 0 6px">치료마다 따로 계산한 금액이에요. 같은 해에 여러 치료를 받으면 연 1회 항목과 연간 한도 때문에 다 더한 것보다 적을 수 있어요.</p>')+opt.map(function(s){return '<details class="stg2"><summary><span>'+esc(s.l)+'</span><b>+'+f(s.sum)+'만원</b></summary><table class="cxt">'+lineRows(s.lines)+'</table></details>'}).join('')+'</div>';
   html+=hpBlock(x);
   if(x.t==='su'){var g=gradeOf(x.su);html+=g?'<p class="note">수술분류표 '+(/^[CR]/.test(x.su[1])?'':x.su[1]+'항 ')+g+'종 기준이에요.'+(x.su[6]?' '+esc(x.su[6]):'')+' 실제 판정은 수술 기록으로 해요.</p>':'<p class="note">약관 별표의 진료행위(수가) 코드로 판정해요.'+(x.su[6]?' '+esc(x.su[6]):'')+'</p>'}
   else html+='<p class="note">'+esc(x.c)+(DATA.kn[x.c]&&DATA.kn[x.c]!==x.n?' · '+esc(DATA.kn[x.c]):'')+'. 지급 여부는 진단서 질병코드로 판정해요.</p>';
@@ -1345,9 +1351,17 @@ function hitCard(x,open){KEYS[x.t+'|'+x.n]=x;var res=compute(x),h=res?(x.c&&SCEN
   if(PANELS[x.t])am=PANELS[x.t].am(x);
   else if(res&&!(h>0)&&!(x.c&&SCEN.isDem(x.c))){var mx=Math.max.apply(0,[0].concat(res.filter(function(s){return !s.main}).map(function(s){return s.sum})));if(mx>0)am='<span class="am">상황 따라 +'+f(mx)+'만원</span>'}
   if(x.t==='su'){var g=gradeOf(x.su);if(g)am='<span class="am">'+g+'종 · '+(h>0?fm(h):'0')+'</span>'}
+  if(TXK&&res&&x.t==='dz'){var ts=res.filter(function(s){return TXK.indexOf(s.k)>-1&&s.sum>0})[0];am=ts?'<span class="am">'+(TXS[ts.k]||'')+' +'+f(ts.sum)+'만원</span>':'<span class="am zero">해당 없음</span>'}
   return '<details class="hit cx"'+(open?' open':'')+' data-k="'+esc(x.t+'|'+x.n)+'"><summary class="hitrow"><span class="nm">'+esc(x.n)+'</span>'+am+'</summary><div class="res">'+(open?cardBody(x,res):'')+'</div></details>'}
 function draw(){var raw=inp.value,q=norm(raw);q=FIX[q]||q;clr.hidden=!raw;$('#chips0').hidden=!!q;$('#prem0').hidden=!!q;if(q!==lastQ){openKey=null;lastQ=q}
-  if(!q||q.length<2){box.innerHTML='';drawHead();return}
+  if(!q||q.length<2&&q!=='암'){box.innerHTML='';drawHead();TXK=null;return}
+  var tx=txMode(q);TXK=null;TXL='';
+  if(tx||/^암(진단|진단비|보험|종류)?$/.test(q)){var CN={};DATA.CA.forEach(function(c){CN[c[0]]=1});var ca=buildItems().filter(function(x){return x.t==='dz'&&CN[x.n]}),
+      mine=ca.filter(function(x){return q.indexOf(norm(x.n))>-1}).sort(function(a,b){return b.n.length-a.n.length}).slice(0,1),
+      list=mine.length?mine:(cfg.gender==='m'?CA_M:CA_F).map(function(n){return ca.filter(function(x){return x.n===n})[0]}).filter(Boolean);
+    if(tx){TXK=tx[2];TXL=tx[1]}
+    box.innerHTML=(mine.length?'':'<p class="grpl" style="margin:18px 0 4px">'+(tx?'어느 암인지 골라 주세요. 암 종류에 따라 '+TXL+' 금액이 달라질 수 있어요.':'어느 암인지 골라 주세요.')+'</p>')+list.map(function(x){return hitCard(x,!!mine.length)}).join('')+
+      (mine.length?'':'<p class="note">목록에 없는 암은 '+(tx?'‘췌장암 '+(TXL==='항암치료'?'항암':TXL)+'’처럼 병명과 같이':'병명으로')+' 찾아 보세요.</p>');drawHead();return}
   var L=find(q),S=q.length>=4?SENT.parse(raw,buildItems()):null;if(S&&(S.subj&&S.subj.t==='no'||S.n<2&&(L.length||S.n<1)))S=null;
   if(S){if(q!==lastSitQ||!SIT){SIT=S;STATE.st=S;sitApply(S);lastSitQ=q}var X=sitItems(SIT);box.innerHTML=stCard()+(X.length?'<p class="grpl" style="margin:18px 0 4px">따로 보기</p>':'')+X.map(function(x){return hitCard(x,false)}).join('');drawHead();return}
   if(!L.length){box.innerHTML='<p class="none">‘'+esc(raw)+'’ 검색 결과가 없어요. 담당자에게 물어봐 주세요.</p>';drawHead();return}
@@ -1438,7 +1452,7 @@ function drawPick(){var q=nrm($('#pq').value).toLowerCase(),out=[];if(q.length>=
 function add(list){list.forEach(function(x){if(!c.riders.some(function(y){return base(y.name)===base(x.name)}))c.riders.push(x)});drawRows()}
 function readText(t,o){var rows=parse(t),line=prodSel||guessLine(rows),got=0,miss=0,list=[],oc=o&&o.ocr?1:0;
   if(oc)rows=rows.filter(function(x){var k=base(x.name);return (k.match(/[가-힣]/g)||[]).length>=4&&!/기준[:：]|^\*|예시|보험료/.test(x.name)});
-  var gaps=0;rows.forEach(function(x){var m=match(x.name,line),fz=0;if(!m&&oc){m=fuzzy(x.name,line);if(m)fz=1}if(m){got++;var ex=expand(m);if(oc)ex.forEach(function(e){e.ocr=1});
+  var gaps=0;rows.forEach(function(x){var m=match(x.name,line),fz=0;if(oc&&(!m||base(m[2])!==base(x.name))){var fu=fuzzy(x.name,line);if(fu){m=fu;fz=1}else if(m)fz=1}if(m){got++;var ex=expand(m);if(oc)ex.forEach(function(e){e.ocr=1});
       if(ex.length>1&&/\[(질병|상해)\d종\]$/.test(ex[0].name)&&!/\[(질병|상해)\d종\]$/.test(x.name)){var by={};ex.forEach(function(e){var k=/\[(질병|상해)\d종\]$/.exec(e.name)[1];(by[k]=by[k]||[]).push(e)});
         Object.keys(by).forEach(function(k){var g=by[k];g.forEach(function(e,i){e.man=i===0?x.man:(i===g.length-1&&x.hi?x.hi:(x.hi||oc?'':x.man));if(oc&&!x.hi)e.man='';if(e.man==='')gaps++});list=list.concat(g)});return}
       list.push({id:m[0],name:fz?m[2]:x.name,man:x.man,sup:x.sup&&careSup(m[2])?1:0,ocr:oc,raw:fz?x.name:''})}else{miss++;list.push({id:'',name:x.name,man:x.man,ocr:oc})}});
@@ -1479,7 +1493,13 @@ function ocrOne(w,im,i,n,say){var tag=n>1?'사진 '+(i+1)+'/'+n+' ':'사진 ',go
   say(tag+'글자 읽는 중이에요...');
   return go(0,2400).then(function(a){if(a.c>=60&&hg(a.t)>=30)return tbl(a);say(tag+'방향을 맞춰 보는 중이에요...');var all=[];
     return go(90,1200).then(function(b){all.push(b);return go(270,1200)}).then(function(b){all.push(b);return go(180,1200)}).then(function(b){all.push(b);all.sort(function(x,y){return y.s-x.s});var bt=all[0];if(bt.s<=a.s*1.2)return tbl(a);say(tag+'돌려서 다시 읽는 중이에요...');return go(bt.rot,2400).then(tbl)})})}
+/* %가 96·9%·%6으로 읽힌 것 되돌림 — 담보 이름에 실제로 쓰이는 숫자(80%, 25% 등) 바로 뒤가 이상·체증·및·닫는 괄호일 때만 */
+var PCTR=null;function pctRe(){if(PCTR)return PCTR;var v={};DATA.riders.forEach(function(r){(String(r[2]).match(/\d+%/g)||[]).forEach(function(t){v[parseInt(t,10)]=1})});
+  var ks=Object.keys(v).sort(function(a,b){return b.length-a.length||b-a});PCTR=ks.length?new RegExp('(^|[^\\d,])('+ks.join('|')+')\\s?(?:96|9%|%6|%9|%)(?=\\s*(?:이상|체증|및|\\)))','g'):/$^/;return PCTR}
+/* 담보 앞뒤의 펼치기 표시(+, ⊕ 등)가 +·@·{ 같은 글자로 읽힌 것 지움. 담보 이름에는 +와 중괄호가 없음 */
+function ocrMark(l){return l.replace(/^\s*(?:[+＋十⊕⊞@©®{}·ㆍ•]+|[(\[]\s*[+＋]\s*[)\]])\s*/,'').replace(/^\s*[()\[\]]\s+(?=[가-힣])/,'').replace(/\s[+＋⊕@{}]+(?=\s|$)/g,' ').replace(/\{/g,'(').replace(/\}/g,')').replace(pctRe(),'$1$2%')}
 function ocrClean(t){var unit=/단위\s*[:：;]?\s*만\s*원/.test(t);return String(t).split(/\n/).map(function(l){
+    l=ocrMark(l);
     l=l.replace(/[|｜]/g,' ').replace(/(\d)[.](\d{3})(?!\d)/g,'$1,$2').replace(/\((II|Il|lI|ll)\)/g,'(Ⅱ)').replace(/\((III|Ill|lll)\)/g,'(Ⅲ)').replace(/([가-힣)\]])(III|Ill|lll)(?=[\s(\[]|$)/g,'$1Ⅲ').replace(/([가-힣)\]])(II|Il|lI|ll)(?=[\s(\[]|$)/g,'$1Ⅱ').replace(/(\d)\s*만\s*[원워윈웜]/g,'$1만원').replace(/(일당|수술비)\s*\(\s*[0-9a-zA-Z|]{3,5}\s*\)/g,'$1(plus)');
     if(unit)l=l.replace(/([가-힣)\]]\s+)(\d{1,3}(?:,\d{3})+|\d{1,5})(?=\s|$|[。.,、])/g,function(m,a,b,off){return inPar(l,off)?m:a+b+'만원'});
     return l.replace(/(\d[\d,]*\s*(?:만원|억원|억))\s+(?=[\[(]?[가-힣])/g,function(m,a,off){return inPar(l,off)?m:a+'\n'})}).join('\n')}
@@ -1533,7 +1553,7 @@ function exportIndex(){var d=new DOMParser().parseFromString(window.__SRC,'text/
   d.getElementById('data').textContent=JSON.stringify(DATA).replace(/</g,'\\u003c');d.getElementById('cfg').textContent='null';d.title='내 보장 검색';return '<!doctype html>\n'+d.documentElement.outerHTML}
 function save(){if(!ok())return;var html=exportHtml();if(window.showSaveFilePicker){window.showSaveFilePicker({suggestedName:fileName(),types:[{description:'HTML',accept:{'text/html':['.html']}}]}).then(function(h){return h.createWritable().then(function(w){return w.write(html).then(function(){return w.close()})})}).then(function(){$('#saveMsg').textContent=fileName()+' 저장했어요.'}).catch(function(e){if(e&&e.name==='AbortError')return;dl(html)});return}dl(html)}
 function start(data){DATA=data;prep();c={name:'',gender:'f',mgr:'',tel:'',prem:'',riders:[]};document.body.classList.add('staff');document.body.dataset.tab='in';
-  $('#ver').textContent='약관 데이터 '+DATA.ver+(DATA.src?' · '+DATA.src.split(' ')[1]+' 기준':'')+' · 6개 상품 담보 '+DATA.riders.length.toLocaleString()+'개';
+  $('#ver').textContent='베타 최종 2026.11.10 · 약관 데이터 '+DATA.ver+(DATA.src?' · '+DATA.src.split(' ')[1]+' 기준':'')+' · 6개 상품 담보 '+DATA.riders.length.toLocaleString()+'개';
   $('#prods').innerHTML='<button type="button" data-p="" aria-pressed="true">전체</button>'+DATA.products.map(function(p){return '<button type="button" data-p="'+esc(p)+'" aria-pressed="false">'+esc(p)+'</button>'}).join('');
   $('#staff').addEventListener('input',function(e){var t=e.target;if(t.dataset.i!=null){var v=parseFloat(t.value);c.riders[+t.dataset.i].man=isFinite(v)&&v>0?v:'';var n=c.riders.filter(function(x){return +x.man>0||(x.sup&&careSup(x.name))}).length;$('#rcount').textContent='담보 '+c.riders.length+'개 · 금액 넣은 담보 '+n+'개';refresh();return}
     if(t.id==='pq'){drawPick();return}if(t.dataset.f){c[t.dataset.f]=t.value;refresh()}if(t.id==='checked')refresh()});
