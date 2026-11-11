@@ -375,12 +375,22 @@ function h_dx(r,o,sc,nm,t){var tg=sc.tags,dx=tg.dx,cw=null;
   if(/보험료납입지원\(유사암진단\)/.test(nm)){if(!dx||SIM_CLS.indexOf(cancer_cls(sc.kcd))<0)return [];return [[0,'유사암 진단 뒤 남은 납입기간 동안 매월 보험료만큼 지원 · 최초 1회','진단비','once','매월 '+f1(r.man)+'만원']]}
   if(/시각장애진단비|언어장애진단비/.test(nm)){var bl=/시각/.test(nm);if(!(bl?tg.blind:tg.mute))return [];return [[r.man,(bl?'시각':'언어')+'장애인으로 등록되면(장애인복지법) · 최초 1회',o.group||'진단비','once']]}
   if(/중증화상및부식/.test(nm)){if(!tg.burn_severe||!/^T(2\d|3[0-2])/.test(sc.kcd))return [];return [[r.man,'3도 화상(심재성 2도 이상 넓은 범위 포함) 또는 중증 부식 · 최초 1회',o.group||'진단비','once']]}
+  var EV=tg.ev2||null,MT=tg.meta||null,n2=nm+pn(r.benefit||'');
+  if(o.stage==='recur'){if(!EV)return [];var relOnly=/재발암및잔여암/.test(nm),incl=/포함/.test(nm),wy=(/(\d)년대기형/.exec(nm)||[0,'1'])[1],fc=cancer_cls(tg.first||sc.kcd);
+    if(relOnly&&EV==='new')return [];if(incl?['major','thy','skin'].indexOf(fc)<0:fc!=='major')return [];
+    return [[r.man,'첫 암 진단 '+wy+'년 지난 뒤 · '+(relOnly?'첫 암과 같은 암(분류번호 동일)의 재발·잔여암만 · 다른 새 암은 제외 · 기타피부암·갑상선암 제외 · 최초 1회':'새 암·전이·재발·잔여암'+(incl?'':' · 기타피부암·갑상선암·전립선암이면 제외')+(/5회한/.test(nm)?' · 5회까지':' · '+wy+'년마다 다시')),o.group||'진단비','once']]}
+  if(EV){if(!(o.need&&o.need[0]==='cont'))return [];if(cancer_cls(tg.first||sc.kcd)!=='major')return []}
+  if(MT){var pcl=cancer_cls(sc.kcd),isTS=pcl==='thy'||pcl==='skin',ly=MT==='lymph',mw=(ly?'림프절로 전이(C77)':'다른 장기로 전이(C78~C80)')+' 진단';
+    if(/림프절전이암|특정전이암/.test(n2)){if(/림프절전이암/.test(n2)!==ly)return [];if(/기타피부암및갑상선암/.test(n2)&&!isTS)return [];if(/암\(유사암제외\)/.test(n2)&&isTS)return [];
+      return [[r.man,mw+' · 최초 1회 · 가입 1년 안에는 50%',o.group||'진단비','once']]}
+    if(/^(갱신형)?(통합)?전이암진단비/.test(nm))return [[r.man,mw+' · 림프절전이암·특정전이암 각각 최초 1회 · 가입 1년 안에는 50%',o.group||'진단비','once']];
+    if(/전이포함/.test(n2)&&tg.msite&&(r.codes||[]).length&&code_hit(r.codes,tg.msite)&&!code_hit(r.codes,sc.kcd))return [[r.man,'전이된 부위가 이 구분에 들어요(전이포함) · 구분마다 최초 1회',o.group||'진단비','once']];
+    if(!o.need)return []}
   if(o.need){cw=cond_ok(r,nm,o,sc);if(!cw)return []}
   else{if(o.reg){var s=special_reg(r,sc,nm,dx);if(!s[0])return [];dx=s[1]}
     if(!dx&&o.cause!=='상해')return [];
     if(o.fam&&o.fam.indexOf(DXFAM[dx])<0&&!hit)return []}
   if(o.cause&&tg.cause!==o.cause)return [];
-  if(!!tg.recur!==(o.stage==='recur'))return [];
   if(!(o.reg&&!(r.codes||[]).length)&&!kcd_ok(o.kcd,r,sc,nm,o))return [];
   var freq=nm.indexOf('연간1회한')>-1?'year':(o.freq||'once'),why=o.why||(typeof cw==='string'?cw:'')||'진단확정';
   if(/안전사고피해치료비/.test(nm)&&tg.violence&&!tg.kidnap)return [[r.man*0.25,'일상생활 중 폭력으로 다침(경찰서 폭력사고 확인서 필요) · 가입금액의 25%',o.group||'진단비','each']];
@@ -733,12 +743,13 @@ function cancerMore(code,c,cs,S,blood){var maj=c==='major',thy=c==='thy',skin=c=
   if(maj){S.push({k:'target2',l:'표적항암 약 2가지 쓰면 (1년 안)',tags:{chemo:1,target:1,drug:2},ev:[['항암','','',['chemo','target'],{nc:1}]]});
     S.push({k:'target3',l:'표적항암 약 3가지 이상 쓰면 (1년 안)',tags:{chemo:1,target:1,drug:3},ev:[['항암','','',['chemo','target'],{nc:1}]]})}
   S.push({k:'tx2',l:'1년에 치료 2가지 이상 받으면 (수술+항암 등)',tags:{surg:cs||'C1',chemo:1,rad:1,tx_cnt:2,acts:['chemo','rad']},ev:[]});
-  if(!blood)S.push({k:'stage4',l:'원격전이 4기로 진단되면',tags:{dx:'cancer',stage4:1},ev:[]});
-  if(maj){S.push({k:'recur',l:'다시 암 진단받으면 (재진단·재발)',tags:{dx:'cancer',recur:1},ev:[]});
-    S.push({k:'cont',l:'첫 암 1년 뒤에도 계속암 진단이면',tags:{dx:'cancer',cont:1},ev:[]})}
+  if(maj||thy||skin){
+    if(!blood){S.push({k:'mlymph',g:'again',l:'림프절로 전이되면',tags:{dx:'cancer',meta:'lymph',meta_lymph:1,msite:'C77'},ev:[]});
+      [['간으로','C78.7','C22'],['폐로','C78.0','C34'],['뼈로','C79.5','C40'],['뇌로','C79.3','C71'],['복막으로','C78.6','C48']].forEach(function(m){if(c3===m[2])return;S.push({k:'morgan',g:'again',l:m[0]+' 전이되면 (원격전이 · 4기)',tags:{dx:'cancer',meta:'organ',meta_organ:1,stage4:1,msite:m[1]},ev:[]})})}
+    S.push({k:'again',g:'again',l:'같은 암이 재발·전이되거나 남아 있으면 (첫 암 진단 1~5년 뒤)',tags:{dx:'cancer',ev2:'rel',cont:1},ev:[]});
+    S.push({k:'newca',g:'again',l:'다른 암이 새로 생기면 (첫 암 진단 1~5년 뒤)',code:'C80',tags:{dx:'cancer',ev2:'new',cont:1,first:code},ev:[]})}
   if(thy){S.push({k:'thyadv',l:'초기가 아닌 갑상선암이면 (2cm 이상·갑상선 밖·전이)',tags:{thy_adv:1},ev:[]});
     S.push({k:'thymed',l:'수질암·역형성암(미분화암)이면',tags:{thy_adv:1,thy_med:1},ev:[]})}
-  if(thy||skin){S.push({k:'mlymph',l:'림프절로 전이되면',tags:{meta_lymph:1},ev:[]});S.push({k:'morgan',l:'다른 장기로 전이되면',tags:{meta_organ:1},ev:[]})}
   if(c3==='C50'){S.push({k:'recon',l:'유방재건수술 받으면',tags:{surg:'?',acts:['surg'],hc:hc('recon',/유방재건/)},ev:[]});
     S.push({k:'mastect',l:'유방 전절제 뒤 복원하면',tags:{mastect:1},ev:[]})}
   S.push({k:'pain',l:'통증완화치료 받으면',tags:{acts:['pain']},ev:[['치료','','',['pain']]]});
@@ -854,7 +865,7 @@ function step(RID,itcR,code,st,ctx){var kcd=st.code||code,tags=Object.assign({},
     var now=ENG.pay_lines(itcR,{kcd:kcd,tags:tags,itc_events:ctx.cum.concat(add)}),why={};L.forEach(function(x){if(x.group==='통합치료비')why[x.name]=x.why});
     now.forEach(function(x){var d=Math.round((x.amt-(ctx.prev[x.name]||0))*10)/10;if(d>0)lines.push({name:x.name,amt:d,why:why[x.name]||x.why,group:'통합치료비',freq:'year'})});
     ctx.prev={};now.forEach(function(x){ctx.prev[x.name]=x.amt});ctx.cum=ctx.cum.concat(add)}
-  var sum=lines.reduce(function(s,x){return s+x.amt},0);return {k:st.k,l:st.l,dem:!!st.dem,main:!!st.main,generic:!!st.generic,lines:lines,sum:Math.round(sum*10)/10}}
+  var sum=lines.reduce(function(s,x){return s+x.amt},0);return {k:st.k,l:st.l,g:st.g||'',dem:!!st.dem,main:!!st.main,generic:!!st.generic,lines:lines,sum:Math.round(sum*10)/10}}
 function run(RID,code,steps){var itcR=RID.filter(function(r){return r.itc||r.inj}),ctx={seen:{},cum:[],prev:{}},out=[];
   steps.filter(function(s){return s.main}).forEach(function(st){out.push(step(RID,itcR,code,st,ctx))});
   steps.filter(function(s){return !s.main}).forEach(function(st){var c2={seen:Object.assign({},ctx.seen),cum:ctx.cum.slice(),prev:Object.assign({},ctx.prev)};out.push(step(RID,itcR,code,st,c2))});
@@ -926,7 +937,7 @@ var KW=[[/깁스|캐스트|석고붕대/,'cast','깁스'],[/부목/,'splint','�
  [/mri|엠알아이|ct촬영|ct찍|씨티|ct/,'mri','MRI·CT'],[/재활|물리치료/,'rehab','재활치료'],[/외상센터/,'trauma','권역외상센터'],[/도수정복|뼈를?맞추|뼈맞춤|정복술/,'reduce','뼈 맞추는 시술'],
  [/신경차단/,'block','신경차단술'],[/고름|절개|천자|흡인/,'aspir','절개·흡인'],
  [/면역항암|키트루다|옵디보|면역치료/,'immune','면역항암'],[/표적항암|표적치료|표적/,'target','표적항암'],[/항암/,'chemo','항암치료'],[/양성자/,'proton','양성자치료'],[/중입자/,'carbon','중입자치료'],[/세기조절/,'imrt','세기조절방사선'],[/방사선/,'rad','방사선치료'],
- [/로봇|다빈치/,'robot','로봇수술'],[/호르몬/,'hormone','호르몬치료'],[/재발|재진단/,'recur','재발'],[/4기|원격전이/,'stage4','4기'],[/림프절전이/,'mlymph','림프절 전이'],[/유방재건|재건/,'recon','재건수술'],[/호스피스/,'hospice','호스피스'],
+ [/로봇|다빈치/,'robot','로봇수술'],[/호르몬/,'hormone','호르몬치료'],[/재발|재진단/,'again','재발'],[/4기|원격전이/,'stage4','4기'],[/림프절전이/,'mlymph','림프절 전이'],[/유방재건|재건/,'recon','재건수술'],[/호스피스/,'hospice','호스피스'],
  [/스텐트|풍선확장|관상동맥중재/,'stent','스텐트'],[/우회술|바이패스/,'cabg','우회술'],[/개두/,'craniot','개두술'],[/코일/,'coil','코일색전술'],[/혈전제거/,'thrombx','혈전제거술'],[/혈전용해/,'thromb','혈전용해'],
  [/하이브리드/,'hybrid','하이브리드'],[/세번째수술|수술을?세번|3차수술/,'surg3','세 번째 수술'],[/두번째수술|재수술|수술을?(한번더|두번)|2차수술/,'surg2','두 번째 수술'],
  [/폭행|맞아서|맞았|맞고/,'viol','맞아서 다침'],[/3도화상|중증화상/,'burn3','3도 화상'],[/투석/,'term','투석'],[/산정특례/,'reg','산정특례 등록']];
@@ -1033,8 +1044,8 @@ function kor(n){n=Math.round(n);if(n<1000)return '약 '+n+'만원';var r=Math.ro
 var FIX={'뇌졸증':'뇌졸중','뇌졸쭝':'뇌졸중','뇌줄중':'뇌졸중','뇌출열':'뇌출혈','뇌경쇄':'뇌경색','심근경새':'심근경색','심근경쇄':'심근경색','갑상샘':'갑상선','백네장':'백내장','녹네장':'녹내장','체장암':'췌장암','담석쯩':'담석증','맹장염':'맹장'};
 var POP_F=['입원·간병','사망·후유장해','유방암','갑상선암','위암','뇌경색','심근경색','치매','디스크 수술','백내장 수술','골절 수술'],POP_M=['입원·간병','사망·후유장해','위암','폐암','전립선암','뇌경색','심근경색','치매','디스크 수술','백내장 수술','골절 수술'];
 var CA_F=['위암','대장암','폐암','유방암','갑상선암','간암','췌장암','자궁경부암','난소암','혈액암','담낭암','신장암','방광암','제자리암'],CA_M=['위암','대장암','폐암','전립선암','간암','췌장암','갑상선암','식도암','혈액암','담낭암','신장암','방광암','제자리암'];
-var TXW=[[/양성자/,'양성자방사선',['proton']],[/중입자/,'중입자방사선',['carbon']],[/세기조절/,'세기조절방사선',['imrt']],[/면역항암|면역치료/,'면역항암',['immune']],[/표적/,'표적항암',['target','target2','target3']],[/방사선/,'방사선치료',['rad','imrt','proton','carbon']],[/항암|화학요법/,'항암치료',['chemo','target','immune']]],TXK=null,TXL='';
-var TXS={chemo:'항암약물',target:'표적항암',target2:'표적항암',target3:'표적항암',immune:'면역항암',rad:'방사선',imrt:'세기조절',proton:'양성자',carbon:'중입자'};
+var TXW=[[/재발|잔여암|재진단|두번째암|2차암|이차암|다시암/,'재발·재진단',['again','newca']],[/림프절전이|임파선전이/,'림프절 전이',['mlymph']],[/전이|4기|말기암/,'전이암',['mlymph','morgan']],[/양성자/,'양성자방사선',['proton']],[/중입자/,'중입자방사선',['carbon']],[/세기조절/,'세기조절방사선',['imrt']],[/면역항암|면역치료/,'면역항암',['immune']],[/표적/,'표적항암',['target','target2','target3']],[/방사선/,'방사선치료',['rad','imrt','proton','carbon']],[/항암|화학요법/,'항암치료',['chemo','target','immune']]],TXK=null,TXL='';
+var TXS={mlymph:'림프절 전이',morgan:'장기 전이',again:'재발·전이',newca:'새 암',chemo:'항암약물',target:'표적항암',target2:'표적항암',target3:'표적항암',immune:'면역항암',rad:'방사선',imrt:'세기조절',proton:'양성자',carbon:'중입자'};
 function txMode(q){for(var i=0;i<TXW.length;i++)if(TXW[i][0].test(q))return TXW[i];return null}
 /* ── 담보 → 엔진 입력 ── */
 function lastBr(s){var m=/\[([^\[\]]+)\]$/.exec(String(s||'').replace(/\s+$/,''));return m?m[1]:null}
@@ -1046,7 +1057,7 @@ function dispName(n){return String(n||'').replace(/\((?:통합간편가입|355�
 /* ── 검색 목록 ── */
 var ITEMS=null;
 function buildItems(){if(ITEMS)return ITEMS;ITEMS=[];var seen={};
-  DATA.CA.concat(DATA.DZ).forEach(function(c){ITEMS.push({t:'dz',n:c[0],c:c[1],al:c[2]||''});seen[c[1]]=1});
+  DATA.CA.concat(DATA.DZ).forEach(function(c){if(/^C7[789]/.test(c[1]))return;ITEMS.push({t:'dz',n:c[0],c:c[1],al:c[2]||''});seen[c[1]]=1});
   DATA.SU.forEach(function(s){ITEMS.push({t:'su',n:s[0],su:s,al:s[3]||''})});
   DATA.NO.forEach(function(s){ITEMS.push({t:'no',n:s[0],note:s[2],al:s[1]||''})});
   ITEMS.push({t:'fx',n:'깁스·흉터·한방',al:'깁스 신깁스 석고 흉터 성형 흉터복원 한방 한의원 첩약 약침 골절치료비 신골절'});
@@ -1056,7 +1067,7 @@ function buildItems(){if(ITEMS)return ITEMS;ITEMS=[];var seen={};
   ITEMS.push({t:'dt',n:'치아 치료',al:'치아 임플란트 크라운 브릿지 틀니 충치 신경치료 근관 스케일링 발치 사랑니 치과 레진 인레이 치조골 치주 실란트'});
   ITEMS.push({t:'lf',n:'사망·후유장해',al:'사망 후유장해 장해 장애 사망보험금 교통사고 운전 사고 실명 절단 마비 시각장애 언어장애 생활자금 재활자금'});
   ITEMS.push({t:'hp',n:'입원·간병',al:'입원 입원비 입원일당 간병 간병인 간병비 간병인사용 간병인지원 간호간병 간호간병통합 병원비 며칠 1인실 중환자실 요양병원'});
-  Object.keys(DATA.kn).forEach(function(c){if(c.indexOf('~')>-1)return;var n=String(DATA.kn[c]).replace(/\([A-Z]\d[^)]*\)/g,'').trim(),w=n.split(' ');if(w.length===2&&w[0]===w[1])n=w[0];if(/^[형병에의을를] /.test(n)||n.length<2)return;ITEMS.push({t:'kn',n:n,c:c,al:''})});
+  Object.keys(DATA.kn).forEach(function(c){if(c.indexOf('~')>-1||/^C7[789]/.test(c))return;var n=String(DATA.kn[c]).replace(/\([A-Z]\d[^)]*\)/g,'').trim(),w=n.split(' ');if(w.length===2&&w[0]===w[1])n=w[0];if(/^[형병에의을를] /.test(n)||n.length<2)return;ITEMS.push({t:'kn',n:n,c:c,al:''})});
   return ITEMS}
 function find(q){var it=buildItems(),hasS=/수술|시술|절제|이식|제거|술$/.test(q),A=[],B=[],K=[];
   it.forEach(function(x){var nm=norm(x.n),hit=nm.indexOf(q)>-1||(nm.length>=3&&q.indexOf(nm)>-1&&x.t!=='kn')||(x.al&&x.al.split(' ').some(function(a){a=norm(a);return a&&a.indexOf(q)>-1}));if(!hit)return;
@@ -1069,19 +1080,25 @@ var CACHE={};
 function compute(x){var key=x.t+'|'+x.n;if(CACHE[key])return CACHE[key];var st,res;
   if(x.t==='su'){st=SCEN.surgSteps(x.su);res=SCEN.run(RID,st[0].code,st)}
   else if(x.t==='no'||PANELS[x.t])res=null;
-  else{st=SCEN.diseaseSteps(x.c);res=SCEN.run(RID,x.c,st)}
+  else{st=SCEN.diseaseSteps(x.c);res=foldMeta(SCEN.run(RID,x.c,st))}
   return CACHE[key]=res}
 function gradeOf(su){var g=ENG.surg5_grade(su[1],su[5]||null);return g}
 function lineRows(L){return L.map(function(x){return '<tr><td><b>'+esc(dispName(x.name))+'</b><span class="why">'+esc(x.why||'')+'</span></td>'+(x.svc&&!(x.amt>0)?'<td class="n svc">'+esc(x.svc)+'</td>':'<td class="n">'+f(x.amt)+'</td>')+'</tr>'}).join('')}
+/* 장기 전이 5곳의 결과가 같으면 한 줄로 */
+function foldMeta(res){var M=res.filter(function(s){return s.k==='morgan'});if(M.length<2)return res;var sig=function(s){return s.lines.map(function(l){return l.name+'|'+l.amt}).join('~')};
+  if(!M.every(function(s){return sig(s)===sig(M[0])}))return res;M[0].l='다른 장기로 전이되면 (간·폐·뼈·뇌 등 원격전이 · 4기)';return res.filter(function(s){return s.k!=='morgan'||s===M[0]})}
+var AGN_NOTE='처음 암 진단 때 받는 돈과는 따로예요. 암진단비처럼 최초 1회인 담보는 다시 나오지 않아요. 기다리는 기간(1·2·5년)은 담보마다 달라요.';
 function cardBody(x,res){if(x.t==='hp')return hpBlock(x);if(x.t==='lf')return lfBlock(x);if(PANELS[x.t]&&PANELS[x.t].blk)return PANELS[x.t].blk(x);if(x.t==='no')return '<p class="one" style="margin-top:0">'+esc(x.note)+'</p><p class="note">실손은 약관 기준으로 따로 봐요.</p>';
   if(x.c&&SCEN.isDem(x.c))return demBody(x,res);
   var txon=function(s){return !!(TXK&&TXK.indexOf(s.k)>-1)},txs=res.filter(txon);
-  var main=res.filter(function(s){return s.main&&!txon(s)}),opt=res.filter(function(s){return !s.main&&s.sum>0&&!txon(s)}),h=SCEN.headline(res),html='';
-  if(txs.length){html+='<div class="optw" style="margin-top:0"><p class="grpl">'+esc(TXL)+'</p>'+txs.map(function(s){return s.sum>0?'<details class="stg2" open><summary><span>'+esc(s.l)+'</span><b>+'+f(s.sum)+'만원</b></summary><table class="cxt">'+lineRows(s.lines)+'</table></details>':'<p class="note">'+esc(s.l)+': 가입하신 담보 중 나오는 게 없어요.</p>'}).join('')+'<p class="note" style="margin:6px 0 0">치료마다 따로 계산한 금액이에요. 같은 해에 여러 치료를 받으면 연 1회 항목과 연간 한도 때문에 다 더한 것보다 적을 수 있어요.</p></div><p class="grpl" style="margin-top:22px">진단·수술까지 보면</p>'}
+  var main=res.filter(function(s){return s.main&&!txon(s)}),opt=res.filter(function(s){return !s.main&&s.sum>0&&!txon(s)&&s.g!=='again'}),agn=res.filter(function(s){return !s.main&&s.sum>0&&!txon(s)&&s.g==='again'}),txg=txs.length&&txs[0].g==='again',h=SCEN.headline(res),html='';
+  if(txs.length){html+='<div class="optw" style="margin-top:0"><p class="grpl">'+esc(TXL)+'</p>'+txs.map(function(s){return s.sum>0?'<details class="stg2" open><summary><span>'+esc(s.l)+'</span><b>+'+f(s.sum)+'만원</b></summary><table class="cxt">'+lineRows(s.lines)+'</table></details>':'<p class="note">'+esc(s.l)+': 가입하신 담보 중 나오는 게 없어요.</p>'}).join('')+'<p class="note" style="margin:6px 0 0">'+(txg?AGN_NOTE:'치료마다 따로 계산한 금액이에요. 같은 해에 여러 치료를 받으면 연 1회 항목과 연간 한도 때문에 다 더한 것보다 적을 수 있어요.')+'</p></div><p class="grpl" style="margin-top:22px">'+(txg?'처음 암 진단 때는':'진단·수술까지 보면')+'</p>'}
   html+=h>0?'<div class="tt">'+f(h)+'만원</div><div class="kk">'+kor(h)+', '+(x.t==='su'?(x.su[1]==null?'이 시술·검사로 받는 보험금 합계예요':'이 수술로 받는 건강보험 보험금 합계예요'):(SCEN.isBlood(x.c)?'진단받고 항암치료까지 받을 때 건강보험 보험금 합계예요':'진단받고 수술까지 받을 때 건강보험 보험금 합계예요'))+'</div>':'<p class="none">'+(x.t==='su'&&x.su[1]==null?'가입하신 담보 중 이 시술·검사로 나오는 보장은 없어요.':'진단·수술로 바로 나오는 보장은 없어요.')+'</p>';
   main.forEach(function(s){if(!s.lines.length&&!(s.generic&&s.k==='surg'))return;html+='<div class="stg"><div class="sh"><span>'+esc(s.l)+'</span><b>'+(s.sum>0?fm(s.sum):'—')+'</b></div>'+(s.lines.length?'<table class="cxt">'+lineRows(s.lines)+'</table>':'')+
     (s.generic&&s.k==='surg'&&RID.some(function(r){var k=ENG.classify(r.name);return k&&k.kind==='surg'&&(k.opt||{}).grade})?'<p class="note">1-5종·1-7종 수술비는 수술마다 종이 달라요. 수술명으로 검색하면 나와요.</p>':'')+'</div>'});
   if(opt.length)html+='<div class="optw"><p class="grpl">이럴 때 더 나와요</p>'+(txs.length?'':'<p class="note" style="margin:0 0 6px">치료마다 따로 계산한 금액이에요. 같은 해에 여러 치료를 받으면 연 1회 항목과 연간 한도 때문에 다 더한 것보다 적을 수 있어요.</p>')+opt.map(function(s){return '<details class="stg2"><summary><span>'+esc(s.l)+'</span><b>+'+f(s.sum)+'만원</b></summary><table class="cxt">'+lineRows(s.lines)+'</table></details>'}).join('')+'</div>';
+  if(agn.length)html+='<div class="optw"><p class="grpl">암이 퍼지거나 다시 생기면</p>'+(txg?'':'<p class="note" style="margin:0 0 6px">'+AGN_NOTE+'</p>')+agn.map(function(s){return '<details class="stg2"><summary><span>'+esc(s.l)+'</span><b>+'+f(s.sum)+'만원</b></summary><table class="cxt">'+lineRows(s.lines)+'</table></details>'}).join('')+
+    (RID.some(function(r){return /통합암진단비|암종별/.test(ENG.nname(r.name))})?'<p class="note">통합암·암종별 진단비는 새 암이 첫 암과 다른 구분이면 그 구분 금액이 따로 나와요. 새 암 병명으로 찾아 보세요.</p>':'')+'</div>';
   html+=hpBlock(x);
   if(x.t==='su'){var g=gradeOf(x.su);html+=g?'<p class="note">수술분류표 '+(/^[CR]/.test(x.su[1])?'':x.su[1]+'항 ')+g+'종 기준이에요.'+(x.su[6]?' '+esc(x.su[6]):'')+' 실제 판정은 수술 기록으로 해요.</p>':'<p class="note">약관 별표의 진료행위(수가) 코드로 판정해요.'+(x.su[6]?' '+esc(x.su[6]):'')+'</p>'}
   else html+='<p class="note">'+esc(x.c)+(DATA.kn[x.c]&&DATA.kn[x.c]!==x.n?' · '+esc(DATA.kn[x.c]):'')+'. 지급 여부는 진단서 질병코드로 판정해요.</p>';
@@ -1337,7 +1354,7 @@ function hitCard(x,open){KEYS[x.t+'|'+x.n]=x;var res=compute(x),h=res?(x.c&&SCEN
   if(PANELS[x.t])am=PANELS[x.t].am(x);
   else if(res&&!(h>0)&&!(x.c&&SCEN.isDem(x.c))){var mx=Math.max.apply(0,[0].concat(res.filter(function(s){return !s.main}).map(function(s){return s.sum})));if(mx>0)am='<span class="am">상황 따라 +'+f(mx)+'만원</span>'}
   if(x.t==='su'){var g=gradeOf(x.su);if(g)am='<span class="am">'+g+'종 · '+(h>0?fm(h):'0')+'</span>'}
-  if(TXK&&res&&x.t==='dz'){var ts=res.filter(function(s){return TXK.indexOf(s.k)>-1&&s.sum>0})[0];am=ts?'<span class="am">'+(TXS[ts.k]||'')+' +'+f(ts.sum)+'만원</span>':'<span class="am zero">해당 없음</span>'}
+  if(TXK&&res&&x.t==='dz'){var ts=res.filter(function(s){return TXK.indexOf(s.k)>-1&&s.sum>0})[0];if(ts&&ts.g==='again')res.forEach(function(s){if(TXK.indexOf(s.k)>-1&&s.sum>ts.sum)ts=s});am=ts?'<span class="am">'+(ts.g==='again'?esc(TXL)+' 최대':(TXS[ts.k]||''))+' +'+f(ts.sum)+'만원</span>':'<span class="am zero">해당 없음</span>'}
   return '<details class="hit cx"'+(open?' open':'')+' data-k="'+esc(x.t+'|'+x.n)+'"><summary class="hitrow"><span class="nm">'+esc(x.n)+'</span>'+am+'</summary><div class="res">'+(open?cardBody(x,res):'')+'</div></details>'}
 function draw(){var raw=inp.value,q=norm(raw);q=FIX[q]||q;clr.hidden=!raw;$('#chips0').hidden=!!q;$('#prem0').hidden=!!q;if(q!==lastQ){openKey=null;lastQ=q}
   if(!q||q.length<2&&q!=='암'){box.innerHTML='';drawHead();TXK=null;return}
